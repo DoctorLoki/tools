@@ -40,18 +40,18 @@ Script_Suffixes = [
 
 Valid_Suffixes = CPP_Suffixes + ProgLang_Suffixes + Script_Suffixes
 
-Var_Name_Chars = string.uppercase + string.lowercase + string.digits + "_"
+Var_Name_Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_"
 
 def main():
 	paths = recursively_find_source_files({}, "", os.listdir("."))
 	total_lines = 0
 	total_bytes = 0
 	for path in sorted(paths):
-		print path
+		print(path)
 		num_lines, num_bytes = count_lines_and_bytes(path)
 		total_lines += num_lines
 		total_bytes += num_bytes
-	print "Lines of code:", total_lines, "Number of bytes:", total_bytes
+	print("Lines of code: " + str(total_lines) + " Number of bytes: " + str(total_bytes))
 
 def count_lines_and_bytes(path):
 	num_lines = 0
@@ -86,9 +86,9 @@ def count_lines_and_bytes(path):
 			var_name = line[:v]
 		elif var_name == line[:v]:
 				# Match found. Report.
-				print "\tDuplicated variable usage in adjacent lines %d and %d:" % (num_lines - 1, num_lines)
-				print "\t\t" + prev[:-1]
-				print "\t\t" + line[:-1]
+				print("\tDuplicated variable usage in adjacent lines %d and %d:" % (num_lines - 1, num_lines))
+				print("\t\t" + prev[:-1])
+				print("\t\t" + line[:-1])
 				# Keep var_name in case it happens again.
 		else:
 			# Replace with this line's variable name.
