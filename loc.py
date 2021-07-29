@@ -37,12 +37,12 @@ def main():
 	total_lines = 0
 	total_bytes = 0
 	for path in sorted(paths):
-		print path
+		print(path)
 		num_lines, num_bytes = count_lines_and_bytes(path)
 		total_files += 1
 		total_lines += num_lines
 		total_bytes += num_bytes
-	print "Lines of code:", total_lines, "Number of bytes:", total_bytes, "Number of files:", total_files
+	print("Lines of code: " + str(total_lines) + " Number of bytes: " + str(total_bytes) + " Number of files: " + str(total_files))
 
 def count_lines_and_bytes(path):
 	num_lines = 0
