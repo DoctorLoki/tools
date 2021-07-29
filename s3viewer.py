@@ -55,7 +55,8 @@ def main():
 				num -= len(folders)
 				if num < len(files):
 					# Files are listed next, choosing one asks whether to copy it to local disk.
-					sys.stdout.write("Copy file: %s ? (y/n) " % (files[num][-1]))
+					filename = files[num][-1]
+					sys.stdout.write("Copy file: %s ? (y/n) " % (filename))
 					sys.stdout.flush()
 					if sys.stdin.readline().strip().lower()[:1] != 'y':
 						continue
@@ -64,7 +65,7 @@ def main():
 					destpath = make_all_dirs(path)
 					if destpath == None:
 						continue
-					cmd = cmdfmt(path, destpath, CopyCmdFmt)
+					cmd = cmdfmt(path + "/" + filename, destpath, CopyCmdFmt)
 					print(cmd)
 					os.system(cmd)
 					break
