@@ -23,23 +23,33 @@ def main():
 	print(cmdfmt("", "", ListCmdFmtPretty))
 	folders, files = ls("")
 	cache[""] = (folders, files)
+	filtertext = None
 	while True:
 		i = 0
 		for date, time, size, name in folders:
 			i += 1
+			if filtertext and filtertext not in name:
+				continue
 			print(ItemFmt % (i, date, time, "", name + "/"))
 		for date, time, size, name in files:
 			i += 1
+			if filtertext and filtertext not in name:
+				continue
 			print(ItemFmt % (i, date, time, size, name))
 		if len(levels) == 0:
 			print("% 5d) exit" % 0)
 		else:
 			print("% 5d) back" % 0)
 		while True:
+			filtertext = None
 			try:
 				sys.stdout.write("Choose: ")
 				sys.stdout.flush()
 				result = sys.stdin.readline()
+				if result and result[:1] == "/" and result[-1:] == "\n":
+					# /text means search for that text in the list of folders and files.
+					filtertext = result[1:-1]
+					break
 				num = int(result)
 				if num == 0:
 					# 0 means go up a level, i.e. cd ..
