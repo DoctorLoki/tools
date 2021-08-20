@@ -16,7 +16,8 @@ import json
 ListCmdFmt       = "aws s3 ls {PATH} 2>/dev/null"
 ListCmdFmtPretty = "aws s3 ls {PATH}"
 CopyCmdFmt       = "aws s3 cp {PATH} {DESTPATH}"
-ItemFmt = "% 5d) %-15s % 12s %-10s %-8s %s"
+GetACLFmt        = "aws s3api get-object-acl --bucket={BUCKET} --key={KEY}"
+ItemFmt = "% 5d) %s %-15s % 12s %-10s %-8s %s"
 
 def main():
 	cache = {}
@@ -32,12 +33,12 @@ def main():
 			i += 1
 			if filtertext and filtertext not in name:
 				continue
-			print(ItemFmt % (i, owner, "", date, time, name + "/"))
+			print(ItemFmt % (i, "drwx", owner, "", date, time, name + "/"))
 		for date, time, owner, size, name in files:
 			i += 1
 			if filtertext and filtertext not in name:
 				continue
-			print(ItemFmt % (i, owner, size, date, time, name))
+			print(ItemFmt % (i, "-rw-", owner, size, date, time, name))
 		if len(levels) == 0:
 			print("% 5d) exit" % 0)
 		else:
@@ -109,7 +110,9 @@ def main():
 			cache[path] = (folders, files)
 
 def get_owner(bucket, key):
-	cmd = "aws s3api get-object-acl --bucket %s --key %s" % (bucket, key)
+	cmd = GetACLFmt
+	cmd = cmd.replace("{BUCKET}", bucket)
+	cmd = cmd.replace("{KEY}", key)
 	try:
 		print(cmd)
 		f = os.popen(cmd)
