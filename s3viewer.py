@@ -55,19 +55,19 @@ def main():
 			try:
 				sys.stdout.write("Choose: ")
 				sys.stdout.flush()
-				result = ""
-				while result == "": 
-					result = sys.stdin.readline()
-					result = result.strip()
-				if result and result[:1] == "/":
+				choice = ""
+				while choice == "": 
+					choice = sys.stdin.readline()
+					choice = choice.strip()
+				if choice and choice[:1] == "/":
 					# /text means search for that text in the list of folders and files.
-					filtertext = result[1:]
+					filtertext = choice[1:]
 					break
-				if result and result[:1] == "@":
+				if choice and choice[:1] == "@":
 					# @owner means search for that owner in the list of folders and files.
-					filterowner = result[1:]
+					filterowner = choice[1:]
 					break
-				if result == "ls -la":
+				if choice == "ls -la":
 					# ls -la means include ownership data in this listing.
 					if path in cache:
 						folder, files = cache[path]
@@ -75,12 +75,38 @@ def main():
 							del cache[path] # remove cached entry to force loading of owner info
 					include_owner = True
 					break
-				if result == "ls -laR":
+				if choice == "ls -laR":
 					# ls -laR means include ownership data and recursively explore all subfolders.
 					list_this_folder = False
 					folders, files = ls_laR("/".join(levels))
 					break
-				num = int(result)
+				if choice == "cd ..":
+					if len(levels) == 0:
+						return
+					levels = levels[:-1]            # cd ..
+					break
+				if choice[:3] == "cd ":
+					subdir = choice[3:]
+					if not subdir:
+						break
+					found = []
+					for date, time, owner, size, foldername in folders:
+						if subdir and subdir[-1] == '*':
+							if foldername[:len(subdir)-1] == subdir[:-1]:
+								found.append(foldername)
+						elif foldername == subdir:
+							found.append(foldername)
+					if len(found) == 1:
+						levels.append(found[0])     # cd subdir
+					else:
+						print("Too many matches, try narrowing your search.")
+						list_this_folder = False
+					break
+				if choice == "pwd":
+					list_this_folder = False
+					print("/".join(levels) + "\n")
+					break
+				num = int(choice)
 				if num == 0:
 					# 0 means go up a level, i.e. cd ..
 					if len(levels) == 0:
