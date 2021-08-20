@@ -16,7 +16,8 @@ import json
 ListCmdFmt       = "aws s3 ls {PATH} 2>/dev/null"
 ListCmdFmtPretty = "aws s3 ls {PATH}"
 CopyCmdFmt       = "aws s3 cp {PATH} {DESTPATH}"
-GetACLFmt        = "aws s3api get-object-acl --bucket={BUCKET} --key={KEY}"
+GetACLFmt        = "aws s3api get-object-acl --bucket={BUCKET} --key={KEY} 2>/dev/null"
+GetACLFmtPretty  = "aws s3api get-object-acl --bucket={BUCKET} --key={KEY}"
 ItemFmt = "% 5d) %s %-15s % 12s %-10s %-8s %s"
 
 def main():
@@ -26,17 +27,23 @@ def main():
 	folders, files = ls("")
 	cache[""] = (folders, files)
 	filtertext = None
+	filterowner = None
 	while True:
+		list_this_folder = True
 		include_owner = False
 		i = 0
 		for date, time, owner, size, name in folders:
 			i += 1
 			if filtertext and filtertext not in name:
 				continue
+			if filterowner and filterowner not in owner:
+				continue
 			print(ItemFmt % (i, "drwx", owner, "", date, time, name + "/"))
 		for date, time, owner, size, name in files:
 			i += 1
 			if filtertext and filtertext not in name:
+				continue
+			if filterowner and filterowner not in owner:
 				continue
 			print(ItemFmt % (i, "-rw-", owner, size, date, time, name))
 		if len(levels) == 0:
@@ -56,13 +63,22 @@ def main():
 					# /text means search for that text in the list of folders and files.
 					filtertext = result[1:]
 					break
+				if result and result[:1] == "@":
+					# @owner means search for that owner in the list of folders and files.
+					filterowner = result[1:]
+					break
 				if result == "ls -la":
-					# ls -la means include ownership data in listings from now on.
+					# ls -la means include ownership data in this listing.
 					if path in cache:
 						folder, files = cache[path]
 						if not files or not files[0] or not files[0][2]: # owner is missing
 							del cache[path] # remove cached entry to force loading of owner info
 					include_owner = True
+					break
+				if result == "ls -laR":
+					# ls -laR means include ownership data and recursively explore all subfolders.
+					list_this_folder = False
+					folders, files = ls_laR("/".join(levels))
 					break
 				num = int(result)
 				if num == 0:
@@ -99,6 +115,8 @@ def main():
 				return
 
 		# List folders and files.
+		if not list_this_folder:
+			continue
 		path = "/".join(levels)
 		if path and path[-1] != '/':
 			path += "/"
@@ -110,11 +128,9 @@ def main():
 			cache[path] = (folders, files)
 
 def get_owner(bucket, key):
-	cmd = GetACLFmt
-	cmd = cmd.replace("{BUCKET}", bucket)
-	cmd = cmd.replace("{KEY}", key)
+	cmd = GetACLFmt.replace("{BUCKET}", bucket).replace("{KEY}", key)
 	try:
-		print(cmd)
+		print(GetACLFmtPretty.replace("{BUCKET}", bucket).replace("{KEY}", key))
 		f = os.popen(cmd)
 		data = f.read()
 		f.close()
@@ -190,6 +206,30 @@ def ls(path, include_owner=False):
 		print("Could not understand line: " + line)
 		continue
 	return folders, files
+
+def ls_laR(path):
+	if path and path[-1] != '/':
+		path += "/"
+	folders, files = ls(path, include_owner=True)
+
+	all_folders = []
+	all_files = []
+
+	for folder in folders:
+		date, time, owner, size, foldername = folder
+		all_folders.append((date, time, owner, size, path + foldername))
+
+	for filedata in files:
+		date, time, owner, size, filename = filedata
+		all_files.append((date, time, owner, size, path + filename))
+
+	for folder in folders:
+		date, time, owner, size, foldername = folder
+		sub_folders, sub_files = ls_laR(path + foldername)
+		all_folders += sub_folders
+		all_files += sub_files
+
+	return all_folders, all_files
 
 def cmdfmt(path="", destpath="", fmt=ListCmdFmt):
 	if path[:5] != "s3://":
