@@ -24,8 +24,8 @@ def main():
 	print(cmdfmt("", "", ListCmdFmtPretty))
 	folders, files = ls("")
 	cache[""] = (folders, files)
+	filtertext = None
 	while True:
-		filtertext = None
 		include_owner = False
 		i = 0
 		for date, time, owner, size, name in folders:
