@@ -42,7 +42,6 @@ class S3Viewer:
 
 	def read_current_path(self):
 		path = self.form_path()
-		print(cmdfmt(path, "", ListCmdFmtPretty))
 		if path in self.cache:
 			self.folders, self.files = self.cache[path]
 		else:
@@ -51,7 +50,7 @@ class S3Viewer:
 
 	def print_current_path(self):
 		self.print_folder(self.folders, self.files)
-		self.print_prompt()
+		self.print_back_option()
 		self.print_filter_settings()
 
 	def print_specific_folder(self, path):
@@ -60,7 +59,7 @@ class S3Viewer:
 		else:
 			folders, files = ls(path)
 		self.print_folder(folders, files)
-		self.print_prompt()
+		self.print_back_option()
 		self.print_filter_settings()
 
 	def print_folder(self, folders, files):
@@ -80,7 +79,7 @@ class S3Viewer:
 				continue
 			print(ItemFmt % (i, "-rw-", owner, size, date, time, name))
 
-	def print_prompt(self):
+	def print_back_option(self):
 		if len(self.levels) == 0:
 			print("% 5d) exit" % 0)
 		else:
@@ -148,21 +147,32 @@ class S3Viewer:
 			self.folders, self.files = ls_laR("/".join(self.levels))
 			return "prompt"
 
-		if choice in ["ls *", "ls -l *"]:
+		if choice in ["ls *", "ls -l *", "ls -a *", "ls -la *", "ls -al *"]:
 			if len(self.folders) > 10:
 				sys.stdout.write("Are you sure you want to list %d folders? (y/n) " % (len(self.folders)))
 				sys.stdout.flush()
 				if sys.stdin.readline().strip().lower()[:1] != 'y':
 					return "prompt"
-			for folder in self.folders:
-				foldername = folder[-1]
-				path = self.form_path() + foldername
+			include_owner = ("a" in choice)
+			folders_to_scan = self.folders
+			#self.folders = []
+			self.files = []
+			base = self.form_path()
+			for folder in folders_to_scan:
+				foldername = folder[-1] + "/"
+				path = base + foldername
 				if path in self.cache:
 					folders, files = self.cache[path]
 				else:
-					folders, files = ls(path)
+					folders, files = ls(path, include_owner)
 					self.cache[path] = (folders, files)
-				self.print_folder(folders, files)
+				for date, time, owner, size, name in folders:
+					self.folders.append((date, time, owner, size, foldername + name))
+				for date, time, owner, size, filename in files:
+					self.files.append((date, time, owner, size, foldername + filename))
+			self.print_folder(self.folders, self.files)
+			self.print_back_option()
+			self.print_filter_settings()
 			return "prompt"
 
 		if choice == "cd .":
@@ -206,7 +216,7 @@ class S3Viewer:
 		if num == 0:
 			# 0 means go up a level, i.e. cd ..
 			if len(self.levels) == 0:               # already at root
-				return "prompt"
+				return "exit"
 			self.levels = self.levels[:-1]          # cd ..
 			return "list"
 
@@ -273,6 +283,7 @@ def get_key(path):
 def ls(path, include_owner=False):
 	cmd = cmdfmt(path, "", ListCmdFmt)
 	try:
+		print(cmdfmt(path, "", ListCmdFmtPretty))
 		f = os.popen(cmd)
 		lines = f.readlines()
 		f.close()
