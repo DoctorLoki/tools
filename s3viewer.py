@@ -20,7 +20,19 @@ GetACLFmt        = "aws s3api get-object-acl --bucket={BUCKET} --key={KEY} 2>/de
 GetACLFmtPretty  = "aws s3api get-object-acl --bucket={BUCKET} --key={KEY}"
 ItemFmt = "% 5d) %s %-15s % 12s %-10s %-8s %s"
 
+Flags = {}
+
 def main():
+	args = sys.argv[1:]
+	for flag in ["debug", "-debug", "--debug"]:
+		if flag in args:
+			Flags["debug"] = open("s3viewer.log", "a")
+			break
+	for flag in ["quiet", "-q", "-quiet", "--quiet"]:
+		if flag in args:
+			Flags["quiet"] = True
+			break
+
 	s3viewer = S3Viewer()
 	s3viewer.loop()
 
@@ -70,28 +82,28 @@ class S3Viewer:
 				continue
 			if self.filter_owner and self.filter_owner not in owner:
 				continue
-			print(ItemFmt % (i, "drwx", owner, "", date, time, name + "/"))
+			println(ItemFmt % (i, "drwx", owner, "", date, time, name + "/"))
 		for date, time, owner, size, name in files:
 			i += 1
 			if self.filter_name and self.filter_name not in name:
 				continue
 			if self.filter_owner and self.filter_owner not in owner:
 				continue
-			print(ItemFmt % (i, "-rw-", owner, size, date, time, name))
+			println(ItemFmt % (i, "-rw-", owner, size, date, time, name))
 
 	def print_back_option(self):
 		if len(self.levels) == 0:
-			print("% 5d) exit" % 0)
+			println("% 5d) exit" % 0)
 		else:
-			print("% 5d) back" % 0)
+			println("% 5d) back" % 0)
 
 	def print_filter_settings(self):
 		if self.filter_name and self.filter_owner:
-			print(" Note: above filtered by name %r and owner %r" % (self.filter_name, self.filter_owner))
+			println(" Note: above filtered by name %r and owner %r" % (self.filter_name, self.filter_owner))
 		elif self.filter_name:
-			print(" Note: above filtered by name %r" % (self.filter_name))
+			println(" Note: above filtered by name %r" % (self.filter_name))
 		elif self.filter_owner:
-			print(" Note: above filtered by owner %r" % (self.filter_owner))
+			println(" Note: above filtered by owner %r" % (self.filter_owner))
 
 	def loop(self):
 		action = "list"
@@ -116,7 +128,7 @@ class S3Viewer:
 				args = line.split()      # Sometimes we just want an array of args.
 				choice = " ".join(args)  # Sometimes want the line with one space between each arg.
 		except:
-			print("\nExiting...")
+			println("\nExiting...")
 			return "exit"
 
 		if line and line[:1] == "/":
@@ -145,18 +157,60 @@ class S3Viewer:
 		if choice in ["ls -laR", "ls -lRa", "ls -alR", "ls -Rla", "ls -aRl", "ls -Ral", "ls -aR", "ls -Ra"]:
 			# ls -laR means include ownership data and recursively explore all subfolders.
 			self.folders, self.files = ls_laR("/".join(self.levels))
+			self.print_current_path()
 			return "prompt"
 
-		if choice in ["ls *", "ls -l *", "ls -a *", "ls -la *", "ls -al *"]:
-			if len(self.folders) > 10:
-				sys.stdout.write("Are you sure you want to list %d folders? (y/n) " % (len(self.folders)))
+		if choice in ["ls *"]:
+			limit = None
+			folders_to_scan = self.folders[:]
+			if len(folders_to_scan) > 10:
+				msgfmt = "Are you sure you want to list %d folders or type a numeric limit? (y/n/42) "
+				sys.stdout.write(msgfmt % (len(folders_to_scan)))
 				sys.stdout.flush()
-				if sys.stdin.readline().strip().lower()[:1] != 'y':
+				response = sys.stdin.readline().strip().lower()
+				if response[:1] in "0123456789":
+					limit = int(response)
+				elif response[:1] != 'y':
 					return "prompt"
 			include_owner = ("a" in choice)
-			folders_to_scan = self.folders
+			if limit != None:
+				folders_to_scan = folders_to_scan[:limit]
+			base = self.form_path()
+			for folder in folders_to_scan:
+				self.folders = []
+				self.files = []
+				foldername = folder[-1] + "/"
+				path = base + foldername
+				folders, files = ls(path, include_owner)
+				for date, time, owner, size, name in folders:
+					self.folders.append((date, time, owner, size, foldername + name))
+				for date, time, owner, size, filename in files:
+					self.files.append((date, time, owner, size, foldername + filename))
+				self.print_folder(self.folders, self.files)
+			self.print_back_option()
+			self.print_filter_settings()
+			return "prompt"
+
+		if choice[:3] == "ls " and choice[-2:] == " *": # ls *, ls -laR *, etc
+			limit = None
+			if len(self.folders) > 10:
+				sys.stdout.write("Are you sure you want to list %d folders or type a numeric limit? (y/n/42) " % (len(self.folders)))
+				sys.stdout.flush()
+				response = sys.stdin.readline().strip().lower()
+				if response[:1] in "0123456789":
+					limit = int(response)
+				elif response[:1] != 'y':
+					return "prompt"
+			include_owner = ("a" in choice)
+			recursive = ("R" in choice)
+			if recursive:
+				folders_to_scan = self.folders
+			else:
+				folders_to_scan = self.folders[:]
+			if limit != None:
+				folders_to_scan = self.folders[:limit]
 			#self.folders = []
-			self.files = []
+			#self.files = []
 			base = self.form_path()
 			for folder in folders_to_scan:
 				foldername = folder[-1] + "/"
@@ -186,6 +240,8 @@ class S3Viewer:
 
 		if len(args) == 2 and args[0] == "cd":
 			subdir = args[1]
+			if subdir and subdir[-1] == "/":
+				subdir = subdir[:-1]
 			found = []
 			for date, time, owner, size, foldername in self.folders:
 				if subdir and subdir[-1] == '*':
@@ -193,24 +249,27 @@ class S3Viewer:
 						found.append(foldername)
 				elif foldername == subdir:
 					found.append(foldername)
+			if len(found) == 0:
+				println("Found no matches, check that subdirectory name.")
+				return "prompt"
 			if len(found) == 1:
 				self.levels.append(found[0])        # cd subdir
 				return "list"
-			print("Too many matches, try narrowing your search.")
+			println("Too many matches, try narrowing your search.")
 			return "prompt"
 
 		if choice == "pwd":
-			print("/".join(self.levels) + "\n")
+			println("/".join(self.levels) + "\n")
 			return "prompt"
 
 		try:
 			num = int(choice)
 		except:
-			print("Option not found: %r" % choice)
+			println("Option not found: %r" % choice)
 			return "prompt"
 
 		if num < 0:
-			print("Invalid option: negative numbers not allowed")
+			println("Invalid option: negative numbers not allowed")
 			return "prompt"
 
 		if num == 0:
@@ -240,22 +299,23 @@ class S3Viewer:
 			if destpath == None:
 				return "prompt"
 			cmd = cmdfmt(path + "/" + filename, destpath, CopyCmdFmt)
-			print(cmd)
+			println(cmd)
 			os.system(cmd)
 			return "prompt"
 
-		print("Invalid option")
+		println("Invalid option")
 		return "prompt"
 
 def get_owner(bucket, key):
 	cmd = GetACLFmt.replace("{BUCKET}", bucket).replace("{KEY}", key)
 	try:
-		print(GetACLFmtPretty.replace("{BUCKET}", bucket).replace("{KEY}", key))
+		if "quiet" not in Flags:
+			println(GetACLFmtPretty.replace("{BUCKET}", bucket).replace("{KEY}", key))
 		f = os.popen(cmd)
 		data = f.read()
 		f.close()
 	except:
-		print("Could not popen %s" % (cmd))
+		println("Could not popen %s" % (cmd))
 		return None
 
 	try:
@@ -283,12 +343,13 @@ def get_key(path):
 def ls(path, include_owner=False):
 	cmd = cmdfmt(path, "", ListCmdFmt)
 	try:
-		print(cmdfmt(path, "", ListCmdFmtPretty))
+		if "quiet" not in Flags:
+			println(cmdfmt(path, "", ListCmdFmtPretty))
 		f = os.popen(cmd)
 		lines = f.readlines()
 		f.close()
 	except:
-		print("Could not popen %s" % (cmd))
+		println("Could not popen %s" % (cmd))
 		lines = []
 
 	files = []
@@ -324,7 +385,7 @@ def ls(path, include_owner=False):
 					owner = get_owner(get_bucket(path), get_key(path + filename))
 				files.append((date, time, owner, size, filename))
 				continue
-		print("Could not understand line: " + line)
+		println("Could not understand line: " + line)
 		continue
 	return folders, files
 
@@ -375,9 +436,9 @@ def make_all_dirs(path=""):
 			os.listdir(destpath)
 			continue
 		except:
-			print("mkdir '%s'" % (destpath))
+			println("mkdir '%s'" % (destpath))
 		if not mkdir(destpath):
-			print("Could not create destination path " + destpath)
+			println("Could not create destination path " + destpath)
 			return None
 	return destpath
 
@@ -392,6 +453,17 @@ def mkdir(dirpath):
 		return True # Created, good.
 	except:
 		return False # Failed to create, bad.
+
+def println(line):
+	sys.stdout.write(line)
+	sys.stdout.write("\n")
+	sys.stdout.flush()
+
+	if "debug" in Flags:
+		debug = Flags["debug"]
+		debug.write(line)
+		debug.write("\n")
+		debug.flush()
 
 if __name__ == "__main__":
 	main()
