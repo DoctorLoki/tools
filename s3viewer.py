@@ -298,7 +298,7 @@ class S3Viewer:
 			destpath = make_all_dirs(path)
 			if destpath == None:
 				return "prompt"
-			cmd = cmdfmt(path + "/" + filename, destpath, CopyCmdFmt)
+			cmd = cmdfmt(path + filename, destpath, CopyCmdFmt)
 			println(cmd)
 			os.system(cmd)
 			return "prompt"
