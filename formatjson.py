@@ -3,11 +3,20 @@
 import os, sys, string, json
 
 INDENT_INC = 2
+SORT_JSON_ARRAYS = ""
 
 def main():
+	global SORT_JSON_ARRAYS
 	fin = sys.stdin
-	if len(sys.argv) > 1:
-		fin = open(sys.argv[1], "rb")
+	for arg in sys.argv[1:]:
+		if arg in ["--sort-arrays", "--sort-arrays=forward"]:
+			SORT_JSON_ARRAYS = "forward"
+			continue
+		if arg in ["--sort-arrays=reverse"]:
+			SORT_JSON_ARRAYS = "reverse"
+			continue
+		fin = open(arg, "rb")
+		break
 	fout = sys.stdout
 
 	j = json.load(fin)
@@ -63,21 +72,32 @@ def sorted_keys(keys):
 			keys1.append(key)
 	keys1.sort()
 	keys2.sort()
-	return keys1[:1] + keys2 + keys1[1:] # Insert ids just after the first entry.
+	#return keys1[:1] + keys2 + keys1[1:] # Insert ids just after the first entry.
+	return keys1 + keys2 # Insert ids last.
 
 def pretty_print_json_array(arr, indent=0, first_indent=0):
 	s = ""
 	s += " " * first_indent
 	s += "[\n"
 
+	items = []
 	indent += INDENT_INC
-	for i, val in enumerate(arr):
-		s += " " * indent
-		s += pretty_print_json(val, indent, 0)
-		if i < len(arr) - 1:
-			s += ","
-		s += "\n"
+	for val in arr:
+		item = " " * indent
+		item += pretty_print_json(val, indent, 0)
+		item += "\n"
+		items.append(item)
 	indent -= INDENT_INC
+
+	if SORT_JSON_ARRAYS == "forward":
+		items.sort()
+	elif SORT_JSON_ARRAYS == "reverse":
+		items.sort(reverse=True)
+
+	for i, item in enumerate(items):
+		s += item
+		if i < len(items) - 1:
+			item += ","
 
 	s += " " * indent
 	s += "]"
