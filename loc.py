@@ -32,6 +32,9 @@ Valid_Suffixes = [
 	]
 
 def main():
+	args = sys.argv[1:]
+	if "vendor" in args or "+vendor" in args:
+		Invalid_Prefixes.remove("vendor")
 	paths = recursively_find_source_files({}, "", os.listdir("."))
 	total_files = 0
 	total_lines = 0
