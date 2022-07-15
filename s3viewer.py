@@ -136,6 +136,16 @@ class S3Viewer:
 			self.filter_name = line[1:]
 			return "list"
 
+		if line and len(line) >= 6 and line[:4] == "ls *" and line[-1] == "*":
+			# ls *name* means search for that name within the names of folders and files.
+			self.filter_name = line[4:-1]
+			return "list"
+
+		if line and len(line) > 10 and line[:10] == "ls | grep ":
+			# ls | grep name means search for that name within the names of folders and files.
+			self.filter_name = line[10:]
+			return "list"
+
 		if line and line[:1] == "@":
 			# @owner means search for that owner within the list of folders and files.
 			self.filter_owner = line[1:]
