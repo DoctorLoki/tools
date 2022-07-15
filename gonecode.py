@@ -23,35 +23,37 @@ Test_Suffixes = [
 		"_test.go",
 	]
 
-Ignore_Test_Files  = 0
-Ignore_Test_Funcs  = 0
-Print_All_Funcs    = 0
-Print_All_Types    = 0
-Print_All_Vars     = 0
-Print_All_Paths    = 0
-Print_Line_Counts  = 1
-Print_Unused_Funcs = 1
-Print_Unused_Types = 1
-Print_Unused_Vars  = 1
+Ignore_Test_Files   = 0
+Ignore_Test_Funcs   = 0
+Print_All_Funcs     = 0
+Print_All_Types     = 0
+Print_All_Vars      = 0
+Print_All_Paths     = 0
+Print_Import_Cycles = 1
+Print_Line_Counts   = 1
+Print_Unused_Funcs  = 1
+Print_Unused_Types  = 1
+Print_Unused_Vars   = 1
 
 def main():
 	global Ignore_Test_Files, Ignore_Test_Funcs
-	global Print_All_Funcs, Print_All_Types, Print_All_Vars, Print_All_Paths, Print_Line_Counts
-	global Print_Unused_Funcs, Print_Unused_Types, Print_Unused_Vars
+	global Print_All_Funcs, Print_All_Types, Print_All_Vars, Print_All_Paths, Print_Import_Cycles
+	global Print_Line_Counts, Print_Unused_Funcs, Print_Unused_Types, Print_Unused_Vars
 
 	root = ""
 	dirname = "."
 	for arg in sys.argv[1:]:
-		if is_param(arg, "--ignore-test-files"):  Ignore_Test_Files  ^= 1; continue
-		if is_param(arg, "--ignore-test-funcs"):  Ignore_Test_Funcs  ^= 1; continue
-		if is_param(arg, "--print-all-funcs"):    Print_All_Funcs    ^= 1; continue
-		if is_param(arg, "--print-all-types"):    Print_All_Types    ^= 1; continue
-		if is_param(arg, "--print-all-vars"):     Print_All_Vars     ^= 1; continue
-		if is_param(arg, "--print-all-paths"):    Print_All_Paths    ^= 1; continue
-		if is_param(arg, "--print-line-counts"):  Print_Line_Counts  ^= 1; continue
-		if is_param(arg, "--print-unused-funcs"): Print_Unused_Funcs ^= 1; continue
-		if is_param(arg, "--print-unused-types"): Print_Unused_Types ^= 1; continue
-		if is_param(arg, "--print-unused-vars"):  Print_Unused_Vars  ^= 1; continue
+		if is_param(arg, "--ignore-test-files"):   Ignore_Test_Files   ^= 1; continue
+		if is_param(arg, "--ignore-test-funcs"):   Ignore_Test_Funcs   ^= 1; continue
+		if is_param(arg, "--print-all-funcs"):     Print_All_Funcs     ^= 1; continue
+		if is_param(arg, "--print-all-types"):     Print_All_Types     ^= 1; continue
+		if is_param(arg, "--print-all-vars"):      Print_All_Vars      ^= 1; continue
+		if is_param(arg, "--print-all-paths"):     Print_All_Paths     ^= 1; continue
+		if is_param(arg, "--print-import-cycles"): Print_Import_Cycles ^= 1; continue
+		if is_param(arg, "--print-line-counts"):   Print_Line_Counts   ^= 1; continue
+		if is_param(arg, "--print-unused-funcs"):  Print_Unused_Funcs  ^= 1; continue
+		if is_param(arg, "--print-unused-types"):  Print_Unused_Types  ^= 1; continue
+		if is_param(arg, "--print-unused-vars"):   Print_Unused_Vars   ^= 1; continue
 		if arg[:2] == "--": print("Unknown directive: " + arg); return
 
 		# Default is to use a command-line argument as the root of the search.
@@ -77,6 +79,11 @@ def main():
 		total_lines += num_lines
 		total_bytes += num_bytes
 
+	imports = {}
+	if Print_Import_Cycles:
+		for path in sorted(paths):
+			find_imports(path, imports, ignore_common_paths)
+
 	used_funcs = {}
 	if Print_Unused_Funcs:
 		for path in sorted(paths):
@@ -91,6 +98,11 @@ def main():
 	if Print_Unused_Vars:
 		for path in sorted(paths):
 			find_vars(path, all_vars, used_vars)
+
+	if Print_Import_Cycles:
+		sorted_list, err = topological_sort(imports)
+		if err:
+			print("Import Cycle:\n\t" + repr(err[1]))
 
 	if Print_All_Funcs:
 		print("Funcs:")
@@ -268,6 +280,157 @@ def find_vars(path, vars, used_vars = None):
 			vars[varname].append(data)
 
 	return vars
+
+def topological_sort(children):  # children maps each item to a set of its child items
+	# Kahn's algorithm
+
+	parents = form_parent_mapping(children)
+
+	starters = set()
+	for child in parents:
+		if len(parents[child]) == 0:
+			starters.add(child)
+	for start in starters:
+		del parents[start]
+
+	sorted_list = []
+	while len(starters) != 0:
+		start = starters.pop()
+		sorted_list.append(start)
+
+		if start in children:
+			for child in children[start]:
+				parents[child].remove(start)
+		if child in parents and len(parents[child]) == 0:
+			starters.add(child)
+			del parents[child]
+
+	err = None
+	if len(parents) > 0:
+		err = ("Error: cycle in graph", parents)
+
+	return sorted_list, err
+
+def form_parent_mapping(children):
+	parents = {}
+	for key in children:
+		parents[key] = set()
+	for key in children:
+		for child in children[key]:
+			if child not in parents:
+				parents[child] = set()
+			parents[child].add(key)
+	return parents
+
+def find_imports(path, imports, ignore=None):
+	lines = open(path).readlines()
+	mode = ""
+	packagename = ""
+	for line in lines:
+		if line[:9] == 'package ':
+			packagename = line[9:].strip()
+			if packagename[-1:] == ';':
+				packagename = packagename[:-1]
+			continue
+		child = ""
+		if line[:8] == 'import "':
+			child = line[8:].strip()
+			if child[-1:] == ';': child = child[:-1]
+			if child[-1:] == '"': child = child[:-1]
+		elif line[:10] == 'import _ "':
+			child = line[10:].strip()
+			if child[-1:] == ';': child = child[:-1]
+			if child[-1:] == '"': child = child[:-1]
+		elif line[:10] == 'import _ `':
+			child = line[10:].strip()
+			if child[-1:] == ';': child = child[:-1]
+			if child[-1:] == '`': child = child[:-1]
+		elif line[:7] == 'import(':
+			mode = "import"
+			continue
+		elif line[:8] == 'import (':
+			mode = "import"
+			continue
+		elif line in [")", ")\n"]:
+			mode = ""
+			continue
+		elif mode == "import":
+			child = line.strip()
+			if child[-1:] == ';': child = child[:-1]
+			while child and child[:1] in '_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789':
+				child = child[1:]
+			while child and child[:1] in " \t":
+				child = child[1:]
+			if child[:1]  == '"': child = child[1:]
+			if child[-1:] == '"': child = child[:-1]
+			if child[:1]  == '`': child = child[1:]
+			if child[-1:] == '`': child = child[:-1]
+		if not child:
+			continue
+		if packagename not in imports:
+			imports[packagename] = set()
+		if ignore and ignore(child):
+			continue
+		imports[packagename].add(child)
+	return imports
+
+def importpath_to_packagename(path):
+	if '/' in path:
+		return path[path.rfind('/')+1:]
+	return path
+
+def ignore_paths_with_slash(path):
+	if '/' in path:
+		return True
+	return False
+
+Golang_stdlib = {
+	"archive",
+	"bufio",
+	"bytes",
+	"compress",
+	"context",
+	"crypto",
+	"database",
+	"embed",
+	"encoding",
+	"errors",
+	"expvar",
+	"flag",
+	"fmt",
+	"hash",
+	"html",
+	"image",
+	"index",
+	"io",
+	"log",
+	"math",
+	"mime",
+	"net",
+	"os",
+	"path",
+	"reflect",
+	"regexp",
+	"runtime",
+	"sort",
+	"strconv",
+	"strings",
+	"sync",
+	"syscall",
+	"testing",
+	"text",
+	"time",
+	"unicode",
+	"unsafe",
+}
+
+def ignore_Golang_stdlib(path):
+	if path in Golang_stdlib:
+		return True
+	return False
+
+def ignore_common_paths(path):
+	return ignore_paths_with_slash(path) or ignore_Golang_stdlib(path)
 
 def count_lines_and_bytes(path):
 	num_lines = 0
