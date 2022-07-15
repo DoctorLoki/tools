@@ -50,7 +50,7 @@ def main():
 def count_lines_and_bytes(path):
 	num_lines = 0
 	num_bytes = 0
-	for line in open(path):
+	for line in open(path, 'r', encoding='ISO-8859-1'):
 		num_lines += 1
 		num_bytes += len(line)
 	return num_lines, num_bytes
