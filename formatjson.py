@@ -26,7 +26,9 @@ def main():
 
 def pretty_print_json(j, indent=0, first_indent=0):
 	s = ""
-	if type(j) == type({}):
+	if j == None:
+		s += pretty_print_json_null()
+	elif type(j) == type({}):
 		s += pretty_print_json_dict(j, indent, first_indent)
 	elif type(j) == type([]):
 		s += pretty_print_json_array(j, indent, first_indent)
@@ -85,7 +87,6 @@ def pretty_print_json_array(arr, indent=0, first_indent=0):
 	for val in arr:
 		item = " " * indent
 		item += pretty_print_json(val, indent, 0)
-		item += "\n"
 		items.append(item)
 	indent -= INDENT_INC
 
@@ -97,7 +98,8 @@ def pretty_print_json_array(arr, indent=0, first_indent=0):
 	for i, item in enumerate(items):
 		s += item
 		if i < len(items) - 1:
-			item += ","
+			s += ","
+		s += "\n"
 
 	s += " " * indent
 	s += "]"
@@ -118,6 +120,9 @@ def pretty_print_json_float(val):
 	s = ""
 	s += repr(val)
 	return s
+
+def pretty_print_json_null():
+	return "null"
 
 if __name__ == '__main__':
 	main()
